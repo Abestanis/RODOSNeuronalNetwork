@@ -1,0 +1,3 @@
+[submodule "Deps/Gazebo_rodos_plugin"]
+	path = Deps/Gazebo_rodos_plugin
+	url = https://github.com/Razrkraken/Gazebo_rodos_plugin.git

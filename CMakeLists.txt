@@ -1,0 +1,93 @@
+#THIS FILE IS AUTO GENERATED FROM THE TEMPLATE! DO NOT CHANGE!
+if(NOT BUILD_FOR_GAZEBO)
+    set(CMAKE_SYSTEM_NAME Generic)
+    set(CMAKE_SYSTEM_VERSION 1)
+endif()
+cmake_minimum_required(VERSION 3.17)
+
+
+if(NOT BUILD_FOR_GAZEBO)
+    # specify cross compilers and tools
+    set(CMAKE_C_COMPILER_WORKS 1)
+    set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+    set(CMAKE_CXX_COMPILER_WORKS 1)
+    set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
+    set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
+    set(CMAKE_AR arm-none-eabi-ar)
+    set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
+    set(CMAKE_OBJDUMP arm-none-eabi-objdump)
+    set(SIZE arm-none-eabi-size)
+endif()
+
+PROJECT(RODOSNeuronalNetwork C CXX ASM)
+set(CMAKE_CXX_STANDARD 14)
+
+
+if(${CMAKE_BUILD_TYPE} STREQUAL Debug)
+    add_definitions(-g3)
+endif()
+
+option(PROFILE_CONTROLLERS "Profile the runtime of the active controller" OFF)
+if(PROFILE_CONTROLLERS)
+    add_definitions(-DPROFILE_CONTROLLERS=1)
+endif()
+
+set(SOURCES
+        Src/communication.cpp
+        Src/locationProcessing.cpp
+        Src/topics.cpp
+        Src/topics.h
+        Src/pidControl.cpp
+        )
+include_directories(Inc Middlewares/ST/AI/Inc)
+
+if(BUILD_FOR_GAZEBO)
+    add_definitions(-DBUILD_FOR_GAZEBO=1)
+    add_subdirectory(Deps/Gazebo_rodos_plugin)
+    add_library(${PROJECT_NAME} SHARED ${SOURCES})
+
+    # Find Gazebo
+    find_package(gazebo REQUIRED)
+    include_directories(${GAZEBO_INCLUDE_DIRS})
+    link_directories(${GAZEBO_LIBRARY_DIRS})
+
+    # Add a Gazebo library that handles messages from RODOS topics
+    add_library(cessna SHARED Simulator/src/cessna.cpp)
+    target_link_libraries(cessna ${GAZEBO_LIBRARIES})
+
+    add_library(LiftDragPluginWithWind SHARED Simulator/src/LiftDragPlugin.cc Simulator/src/LiftDragPlugin.hh)
+    target_link_libraries(LiftDragPluginWithWind ${GAZEBO_LIBRARIES})
+
+    target_link_libraries(${PROJECT_NAME} PUBLIC rodos_plugin cessna LiftDragPluginWithWind)
+else()
+    set(EMBEDDED_SOURCES
+            Src/app_x-cube-ai.c
+            Src/LSM9DS1.cpp
+            Src/LSM9DS1.h
+            Src/network.c
+            Src/network_data.c
+            Src/NNController.cpp
+            Src/sensors.cpp
+            Src/servo.cpp
+            )
+
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
+    include(Deps/Gazebo_rodos_plugin/deps/rodos/cmake/port/skith.cmake)
+    add_subdirectory(Deps/Gazebo_rodos_plugin/deps/rodos)
+    add_executable(${PROJECT_NAME}.elf ${SOURCES} ${EMBEDDED_SOURCES})
+
+    add_library(networkRuntime STATIC IMPORTED)
+    set_property(TARGET networkRuntime PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime512_CM4_GCC.a)
+
+    target_link_libraries(${PROJECT_NAME}.elf PUBLIC rodos networkRuntime)
+
+    set(HEX_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.hex)
+    set(BIN_FILE ${PROJECT_BINARY_DIR}/${PROJECT_NAME}.bin)
+
+    add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
+            COMMAND ${CMAKE_OBJCOPY} -Oihex $<TARGET_FILE:${PROJECT_NAME}.elf> ${HEX_FILE}
+            COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${PROJECT_NAME}.elf> ${BIN_FILE}
+            COMMENT "Building ${HEX_FILE}
+Building ${BIN_FILE}")
+
+endif()
