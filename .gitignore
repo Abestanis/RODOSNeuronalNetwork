@@ -30,5 +30,4 @@ Src/network.c
 Src/network_data.c
 Inc/network.h
 Inc/network_data.h
-Inc/app_x-cube-ai.h
 Inc/constants_ai.h

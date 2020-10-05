@@ -61,7 +61,6 @@ if(BUILD_FOR_GAZEBO)
     target_link_libraries(${PROJECT_NAME} PUBLIC rodos_plugin cessna LiftDragPluginWithWind)
 else()
     set(EMBEDDED_SOURCES
-            Src/app_x-cube-ai.c
             Src/LSM9DS1.cpp
             Src/LSM9DS1.h
             Src/network.c

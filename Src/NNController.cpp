@@ -1,8 +1,16 @@
 #include <rodos.h>
 #include "topics.h"
-#include "app_x-cube-ai.h"
+#include "network.h"
+#include "network_data.h"
 
-extern ai_buffer ai_input[AI_NETWORK_IN_NUM];
+/* Helper macros */
+#define AI_MIN(x_, y_) ( ((x_)<(y_)) ? (x_) : (y_) )
+
+#define AI_MAX(x_, y_) ( ((x_)>(y_)) ? (x_) : (y_) )
+
+#define AI_CLAMP(x_, min_, max_, type_) (type_) (AI_MIN(AI_MAX(x_, min_), max_))
+
+#define AI_ROUND(v_, type_) (type_) ( ((v_)<0) ? ((v_)-0.5f) : ((v_)+0.5f) )
 
 static CommBuffer<Quaternion> orientationBuffer;
 static Subscriber orientationSubscriber(
@@ -50,7 +58,7 @@ protected:
 
 class NNController : public StaticThread<> {
 public:
-    NNController(int64_t period) : StaticThread("NNController") {
+    explicit NNController(int64_t period) : StaticThread("NNController") {
         this->period = period;
     }
     
@@ -116,6 +124,64 @@ public:
 
 private:
     
+    /*
+     * Init function to create and initialize a NN.
+     */
+    int aiInit(const ai_u8* activations) {
+        ai_error err;
+        
+        /* 1 - Specific AI data structure to provide the references of the
+         * activation/working memory chunk and the weights/bias parameters */
+        const ai_network_params params = {
+                AI_NETWORK_DATA_WEIGHTS(ai_network_data_weights_get()),
+                AI_NETWORK_DATA_ACTIVATIONS(activations)
+        };
+        
+        /* 2 - Create an instance of the NN */
+        err = ai_network_create(&network, (const ai_buffer*) AI_NETWORK_DATA_CONFIG);
+        if (err.type != AI_ERROR_NONE) {
+            return -1;
+        }
+        
+        /* 3 - Initialize the NN - Ready to be used */
+        if (!ai_network_init(network, &params)) {
+            err = ai_network_get_error(network);
+            ai_network_destroy(network);
+            network = AI_HANDLE_NULL;
+            return -2;
+        }
+        
+        return 0;
+    }
+    
+    /*
+     * Run function to execute an inference.
+     */
+    int aiRun(const void* in_data, void* out_data) {
+        ai_i32 nbatch;
+        ai_error err;
+        
+        /* Parameters checking */
+        if (!in_data || !out_data || !network) {
+            return -1;
+        }
+        
+        /* Initialize input/output buffer handlers */
+        ai_input[0].n_batches = 1;
+        ai_input[0].data = AI_HANDLE_PTR(in_data);
+        ai_output[0].n_batches = 1;
+        ai_output[0].data = AI_HANDLE_PTR(out_data);
+        
+        /* 2 - Perform the inference */
+        nbatch = ai_network_run(network, &ai_input[0], &ai_output[0]);
+        if (nbatch != 1) {
+            err = ai_network_get_error(network);
+            return err.code;
+        }
+        
+        return 0;
+    }
+    
     static void setDouble(ai_i8* buffer, size_t index, double value,
                           ai_buffer_format bufferFormat) {
         if (AI_BUFFER_FMT_GET_TYPE(bufferFormat) == AI_BUFFER_FMT_TYPE_FLOAT) {
@@ -150,6 +216,10 @@ private:
     }
     
     int64_t period;
+    /* Global handle to reference the instance of the NN */
+    ai_handle network = AI_HANDLE_NULL;
+    ai_buffer ai_input[AI_NETWORK_IN_NUM] = AI_NETWORK_IN;
+    ai_buffer ai_output[AI_NETWORK_OUT_NUM] = AI_NETWORK_OUT;
 };
 
 NNController nnController(50 * MILLISECONDS);
