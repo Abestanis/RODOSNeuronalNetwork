@@ -64,7 +64,7 @@ typedef struct {
 
 static CommBuffer<int64_t> controllerProfilerStatus;
 static Subscriber controllerProfilerSubscriber(
-        controllerProfiler, controllerProfilerStatus, "Status Controller Profiler");
+        controllerProfilerTopic, controllerProfilerStatus, "Status Controller Profiler");
 #endif /* PROFILE_CONTROLLERS */
 
 #ifdef BUILD_FOR_GAZEBO

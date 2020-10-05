@@ -102,7 +102,7 @@ PIDControl::PIDControl(int64_t period) : StaticThread("PID-Controller") {
             yawControl(orientation.yaw, targetOrientation.yaw);
             pitchControl(orientation.pitch, targetOrientation.pitch);
 #ifdef PROFILE_CONTROLLERS
-            controllerProfiler.publish(NOW() - startTime);
+            controllerProfilerTopic.publish(NOW() - startTime);
 #endif /* PROFILE_CONTROLLERS */
         }
         suspendCallerUntil(nextTime);

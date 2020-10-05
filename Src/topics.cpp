@@ -18,13 +18,9 @@ Topic<TargetOrientation> targetOrientationTopic(-1, "Target Orientation");
 GazeboTopic<BoolMessage> sensorsReadyTopic(-1, "Sensors Ready Flag");
 
 #ifdef PROFILE_CONTROLLERS
-Topic<int64_t> controllerProfiler(-1, "Controller Profiler");
+Topic<int64_t> controllerProfilerTopic(-1, "Controller Profiler");
 #endif /* PROFILE_CONTROLLERS */
 
 #ifdef BUILD_FOR_GAZEBO
 GazeboTopic<gazebo::msgs::Vector2d> windTunnelMotorTopic(-1, "Wind Tunnel Motor Speed");
 #endif /* BUILD_FOR_GAZEBO */
-
-
-void MAIN() {
-}

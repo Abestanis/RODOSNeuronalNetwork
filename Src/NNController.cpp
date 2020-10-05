@@ -111,7 +111,7 @@ public:
                     continue;
                 }
 #ifdef PROFILE_CONTROLLERS
-                controllerProfiler.publish(NOW() - startTime);
+                controllerProfilerTopic.publish(NOW() - startTime);
 #endif /* PROFILE_CONTROLLERS */
                 
                 elevatorControlTopic.publish(getDouble(nnOutput, 0, bufferFormat));
