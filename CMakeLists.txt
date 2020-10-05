@@ -55,7 +55,8 @@ if(BUILD_FOR_GAZEBO)
     add_library(cessna SHARED Simulator/src/cessna.cpp)
     target_link_libraries(cessna ${GAZEBO_LIBRARIES})
 
-    add_library(LiftDragPluginWithWind SHARED Simulator/src/LiftDragPlugin.cc Simulator/src/LiftDragPlugin.hh)
+    add_library(LiftDragPluginWithWind SHARED
+            Simulator/src/LiftDragPlugin.cc Simulator/src/LiftDragPlugin.hh)
     target_link_libraries(LiftDragPluginWithWind ${GAZEBO_LIBRARIES})
 
     target_link_libraries(${PROJECT_NAME} PUBLIC rodos_plugin cessna LiftDragPluginWithWind)
@@ -69,14 +70,32 @@ else()
             Src/sensors.cpp
             Src/servo.cpp
             )
+    file(GLOB NN_RUNTIME "${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime*_GCC.a")
 
+    if(NOT EXISTS "${PROJECT_SOURCE_DIR}/Src/network.c"
+            OR NOT EXISTS "${PROJECT_SOURCE_DIR}/Src/network_data.c"
+            OR NOT EXISTS "${PROJECT_SOURCE_DIR}/Inc/network.h"
+            OR NOT EXISTS "${PROJECT_SOURCE_DIR}/Inc/network_data.h"
+            OR NOT EXISTS "${NN_RUNTIME}")
+        message("The neuronal network components need to be generated using STM32CubeMX.")
+        message("Check the README.md for more information.")
+        find_program(STM32CUBE_MX_EXECUTABLE STM32CubeMX PATHS
+                $ENV{ProgramFiles}/STMicroelectronics/STM32Cube/STM32CubeMX
+                $ENV{ProgramFiles\(x86\)}/STMicroelectronics/STM32Cube/STM32CubeMX)
+        if (EXISTS "${STM32CUBE_MX_EXECUTABLE}")
+            execute_process(COMMAND
+                    ${STM32CUBE_MX_EXECUTABLE} "${PROJECT_SOURCE_DIR}/RODOSNeuronalNetwork.ioc")
+            file(GLOB NN_RUNTIME
+                    "${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime*_GCC.a")
+        endif()
+    endif()
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
     include(Deps/Gazebo_rodos_plugin/deps/rodos/cmake/port/skith.cmake)
     add_subdirectory(Deps/Gazebo_rodos_plugin/deps/rodos)
     add_executable(${PROJECT_NAME}.elf ${SOURCES} ${EMBEDDED_SOURCES})
 
     add_library(networkRuntime STATIC IMPORTED)
-    set_property(TARGET networkRuntime PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime512_CM4_GCC.a)
+    set_property(TARGET networkRuntime PROPERTY IMPORTED_LOCATION ${NN_RUNTIME})
 
     target_link_libraries(${PROJECT_NAME}.elf PUBLIC rodos networkRuntime)
 

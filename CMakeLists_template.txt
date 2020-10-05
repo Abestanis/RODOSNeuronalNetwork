@@ -1,11 +1,11 @@
 #${templateWarning}
-if (NOT BUILD_FOR_GAZEBO)
+if(NOT BUILD_FOR_GAZEBO)
     set(CMAKE_SYSTEM_NAME Generic)
     set(CMAKE_SYSTEM_VERSION 1)
 endif()
 ${cmakeRequiredVersion}
 
-if (NOT BUILD_FOR_GAZEBO)
+if(NOT BUILD_FOR_GAZEBO)
     # specify cross compilers and tools
     set(CMAKE_C_COMPILER_WORKS 1)
     set(CMAKE_C_COMPILER arm-none-eabi-gcc)
@@ -27,7 +27,7 @@ if($${CMAKE_BUILD_TYPE} STREQUAL Debug)
 endif()
 
 option(PROFILE_CONTROLLERS "Profile the runtime of the active controller" OFF)
-if (PROFILE_CONTROLLERS)
+if(PROFILE_CONTROLLERS)
     add_definitions(-DPROFILE_CONTROLLERS=1)
 endif()
 
@@ -40,7 +40,7 @@ set(SOURCES
         )
 include_directories(Inc Middlewares/ST/AI/Inc)
 
-if (BUILD_FOR_GAZEBO)
+if(BUILD_FOR_GAZEBO)
     add_definitions(-DBUILD_FOR_GAZEBO=1)
     add_subdirectory(Deps/Gazebo_rodos_plugin)
     add_library($${PROJECT_NAME} SHARED $${SOURCES})
@@ -54,13 +54,13 @@ if (BUILD_FOR_GAZEBO)
     add_library(cessna SHARED Simulator/src/cessna.cpp)
     target_link_libraries(cessna $${GAZEBO_LIBRARIES})
 
-    add_library(LiftDragPluginWithWind SHARED Simulator/src/LiftDragPlugin.cc Simulator/src/LiftDragPlugin.hh)
+    add_library(LiftDragPluginWithWind SHARED
+            Simulator/src/LiftDragPlugin.cc Simulator/src/LiftDragPlugin.hh)
     target_link_libraries(LiftDragPluginWithWind $${GAZEBO_LIBRARIES})
 
     target_link_libraries($${PROJECT_NAME} PUBLIC rodos_plugin cessna LiftDragPluginWithWind)
 else()
     set(EMBEDDED_SOURCES
-            Src/app_x-cube-ai.c
             Src/LSM9DS1.cpp
             Src/LSM9DS1.h
             Src/network.c
@@ -69,14 +69,32 @@ else()
             Src/sensors.cpp
             Src/servo.cpp
             )
+    file(GLOB NN_RUNTIME "$${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime*_GCC.a")
 
+    if(NOT EXISTS "$${PROJECT_SOURCE_DIR}/Src/network.c"
+            OR NOT EXISTS "$${PROJECT_SOURCE_DIR}/Src/network_data.c"
+            OR NOT EXISTS "$${PROJECT_SOURCE_DIR}/Inc/network.h"
+            OR NOT EXISTS "$${PROJECT_SOURCE_DIR}/Inc/network_data.h"
+            OR NOT EXISTS "$${NN_RUNTIME}")
+        message("The neuronal network components need to be generated using STM32CubeMX.")
+        message("Check the README.md for more information.")
+        find_program(STM32CUBE_MX_EXECUTABLE STM32CubeMX PATHS
+                $ENV{ProgramFiles}/STMicroelectronics/STM32Cube/STM32CubeMX
+                $ENV{ProgramFiles\(x86\)}/STMicroelectronics/STM32Cube/STM32CubeMX)
+        if (EXISTS "$${STM32CUBE_MX_EXECUTABLE}")
+            execute_process(COMMAND
+                    $${STM32CUBE_MX_EXECUTABLE} "$${PROJECT_SOURCE_DIR}/RODOSNeuronalNetwork.ioc")
+            file(GLOB NN_RUNTIME
+                    "$${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime*_GCC.a")
+        endif()
+    endif()
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
     include(Deps/Gazebo_rodos_plugin/deps/rodos/cmake/port/skith.cmake)
     add_subdirectory(Deps/Gazebo_rodos_plugin/deps/rodos)
     add_executable($${PROJECT_NAME}.elf $${SOURCES} $${EMBEDDED_SOURCES})
 
     add_library(networkRuntime STATIC IMPORTED)
-    set_property(TARGET networkRuntime PROPERTY IMPORTED_LOCATION $${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime512_CM4_GCC.a)
+    set_property(TARGET networkRuntime PROPERTY IMPORTED_LOCATION $${NN_RUNTIME})
 
     target_link_libraries($${PROJECT_NAME}.elf PUBLIC rodos networkRuntime)
 
