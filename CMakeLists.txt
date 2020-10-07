@@ -83,8 +83,11 @@ else()
                 $ENV{ProgramFiles}/STMicroelectronics/STM32Cube/STM32CubeMX
                 $ENV{ProgramFiles\(x86\)}/STMicroelectronics/STM32Cube/STM32CubeMX)
         if (EXISTS "${STM32CUBE_MX_EXECUTABLE}")
+            file(WRITE ${CMAKE_BINARY_DIR}/stm32cubeMx.script "project generate
+exit")
             execute_process(COMMAND
-                    ${STM32CUBE_MX_EXECUTABLE} "${PROJECT_SOURCE_DIR}/RODOSNeuronalNetwork.ioc")
+                    ${STM32CUBE_MX_EXECUTABLE} "${PROJECT_SOURCE_DIR}/RODOSNeuronalNetwork.ioc"
+                    -q "${CMAKE_BINARY_DIR}/stm32cubeMx.script")
             file(GLOB NN_RUNTIME
                     "${PROJECT_SOURCE_DIR}/Middlewares/ST/Ai/Lib/NetworkRuntime*_GCC.a")
         endif()
