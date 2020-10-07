@@ -3,35 +3,64 @@
 #include "stm32f4xx_conf.h"
 
 /**
- * Default servo value
+ * The frequency that the pulse width modulation can be changed in hertz.
+ */
+#define PWM_FREQUENCY 50
+/**
+ * The number of individual steps the PWM can be configured in.
+ * (If the PWM is configured to this value, it would be always on.)
+ */
+#define PWM_STEPS 1000
+/**
+ * Default servo value in PWM active steps.
  */
 #define PWM_START_VALUE 72
 /**
- * Max servo value
+ * Maximum allowed servo value in PWM active steps.
  */
 #define PWM_UPPER_LIMIT 100
 /**
- * Min servo value
+ * Minimum allowed servo value in PWM active steps.
  */
 #define PWM_UNDER_LIMIT 55
 
-
+/**
+ * Buffers that save the last value from the servo controller topics.
+ */
 static CommBuffer<double> elevatorServoBuffer, aileronsServoBuffer, rudderServoBuffer;
+/**
+ * Subscriber to the elevator topic, which writes the latest value in the elevator buffer.
+ */
 static Subscriber elevatorServoSubscriber(elevatorControlTopic, elevatorServoBuffer,
         "Elevator Servo Status");
+/**
+ * Subscriber to the ailerons topic, which writes the latest value in the ailerons buffer.
+ */
 static Subscriber aileronsServoSubscriber(aileronsControlTopic, aileronsServoBuffer,
         "Ailerons Servo Status");
+/**
+ * Subscriber to the rudder topic, which writes the latest value in the rudder buffer.
+ */
 static Subscriber rudderServoSubscriber(rudderControlTopic, rudderServoBuffer,
         "Rudder Servo Status");
 
 /*
- * Represents an actuator that can be controlled with a PWM signal.
+ * Represents an servo motor actuator that can be controlled with a PWM signal.
  */
 class Servo : public StaticThread<> {
 public:
     
-    Servo(const char* name, int64_t period, HAL_PWM* pwm, int pwmStartValue,
-          CommBuffer<double>* commandBuffer) : StaticThread(name) {
+    /**
+     * Create a new servo controller thread.
+     *
+     * @param name The name of the thread.
+     * @param period The period in nanoseconds in which the thread checks for updated PWM signals.
+     * @param pwm The hardware PWM id to use.
+     * @param pwmStartValue The initial pwm value of the PWM in active steps.
+     * @param commandBuffer The command buffer to read the latest PWM target in degrees.
+     */
+    Servo(const char* name, int64_t period, PWM_IDX pwm, int pwmStartValue,
+          CommBuffer<double>* commandBuffer) : StaticThread(name), pwm(pwm) {
         this->period = period;
         this->pwm = pwm;
         this->pwmStartValue = pwmStartValue;
@@ -42,10 +71,13 @@ public:
      * Initialize the servo.
      */
     void init() override {
-        pwm->init(50, 1000);
-        pwm->write(pwmStartValue);
+        pwm.init(PWM_FREQUENCY, PWM_STEPS);
+        pwm.write(pwmStartValue);
     }
     
+    /**
+     * Run the servo thread loop: Pull the PWM target from the buffer and set the PWM to it
+     */
     [[noreturn]] void run() override {
         int dutyCycle;
         double targetAngle = 0;
@@ -62,9 +94,10 @@ public:
                 dutyCycle = PWM_UNDER_LIMIT;
             }
             
-            // Set the duty cycle of the servo, but make sure to only change one at a time.
+            // Set the duty cycle of the servo, but make sure to only change one
+            // at a time to prevent a spike in electricity usage by the servos.
             onlyOneServo.enter();
-            pwm->write(dutyCycle);
+            pwm.write(dutyCycle);
             onlyOneServo.leave();
             
             suspendCallerUntil(nextTime);
@@ -72,17 +105,20 @@ public:
     }
 
 private:
+    /**
+     * The period in nanoseconds for the PWM controller thread loop.
+     */
     int64_t period;
     /**
      * Pulse width modulation timer.
      */
-    HAL_PWM* pwm;
+    HAL_PWM pwm;
     /**
-     * Initial value of the Pulse width modulation signal.
+     * Initial value of the pulse width modulation signal.
      */
     int pwmStartValue;
     /**
-     * A buffer from which to read target angles.
+     * A buffer from which to read target angle.
      */
     CommBuffer<double>* commandBuffer;
     /**
@@ -94,12 +130,18 @@ private:
 
 Semaphore Servo::onlyOneServo;
 
-static HAL_PWM pwm0(PWM_IDX00);
-static HAL_PWM pwm1(PWM_IDX01);
-static HAL_PWM pwm3(PWM_IDX03);
-
-static Servo elevatorServo("Servo Elevator", 1 * SECONDS, &pwm0, PWM_START_VALUE,
-        &elevatorServoBuffer);
-static Servo aileronsServo("Servo Ailerons", 1 * SECONDS, &pwm1, PWM_START_VALUE,
-        &aileronsServoBuffer);
-static Servo rudderServo("Servo Rudder", 1 * SECONDS, &pwm3, PWM_START_VALUE, &rudderServoBuffer);
+/**
+ * The servo that controls the elevator control area.
+ */
+static Servo elevatorServo("Servo Elevator", 50 * MILLISECONDS,
+        PWM_IDX00, PWM_START_VALUE, &elevatorServoBuffer);
+/**
+ * The servo that controls both ailerons control areas.
+ */
+static Servo aileronsServo("Servo Ailerons", 50 * MILLISECONDS,
+        PWM_IDX01, PWM_START_VALUE, &aileronsServoBuffer);
+/**
+ * The servo that controls the rudder control area.
+ */
+static Servo rudderServo("Servo Rudder", 50 * MILLISECONDS,
+        PWM_IDX03, PWM_START_VALUE, &rudderServoBuffer);
